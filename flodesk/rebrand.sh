@@ -2,6 +2,7 @@
 # usage: ./rebrand.sh <rustdesk-checkout> <logo.png 512+> [rendezvous-host] [pubkey]
 # Needs: ImageMagick (convert), git submodules initialised (libs/hbb_common).
 set -euo pipefail
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 RD=$(realpath "$1"); LOGO=$(realpath "$2"); HOST=${3:-}; KEY=${4:-}
 cd "$RD"
 sedi() { sed -i "$@"; }
@@ -61,15 +62,20 @@ sedi -e 's/static const Color accent = Color(0xFF0071FF)/static const Color acce
      -e 's/static const Color canvasColor = Color(0xFF212121)/static const Color canvasColor = Color(0xFF1F232B)/' \
      -e 's/static const Color border = Color(0xFFCCCCCC)/static const Color border = Color(0xFFE5E4E2)/' $T
 mkdir -p flutter/assets/fonts
-# Vazirmatn: download the OFL font files into flutter/assets/fonts/ (see README), then:
-python3 - <<'PY'
-import re,io
+# Vazirmatn (OFL) TTFs ship in flodesk/fonts/ ; register in pubspec ONLY if the files exist (a missing asset breaks the whole build)
+if [ -f "$SCRIPT_DIR/fonts/Vazirmatn-Regular.ttf" ] && [ -f "$SCRIPT_DIR/fonts/Vazirmatn-Bold.ttf" ]; then
+  cp "$SCRIPT_DIR"/fonts/Vazirmatn-*.ttf flutter/assets/fonts/
+  python3 - <<'PY'
 p='flutter/pubspec.yaml'; s=open(p,encoding='utf8').read()
 if 'Vazirmatn' not in s:
     s=s.replace("  fonts:\n","  fonts:\n    - family: Vazirmatn\n      fonts:\n        - asset: assets/fonts/Vazirmatn-Regular.ttf\n        - asset: assets/fonts/Vazirmatn-Bold.ttf\n          weight: 700\n",1)
     open(p,'w',encoding='utf8').write(s)
 PY
-sedi -E "s/(static ThemeData (light|dark)Theme = ThemeData\()/\1\n    fontFamily: 'Vazirmatn',/" $T
+  USE_FONT=1
+else
+  echo "WARN: Vazirmatn TTFs not found in $SCRIPT_DIR/fonts - skipping font" >&2; USE_FONT=0
+fi
+[ "${USE_FONT:-0}" = 1 ] && sedi -E "s/(static ThemeData (light|dark)Theme = ThemeData\()/\1\n    fontFamily: 'Vazirmatn',/" $T
 echo "RTL: set locale fa in flutter/lib/main.dart (Locale('fa')) or select فارسی in app language; ID/password card font: edit desktop_home_page.dart buildIDBoard/buildPasswordBoard TextStyle(fontSize: 32+)."
 
 # --- 4) default server (optional) ---
