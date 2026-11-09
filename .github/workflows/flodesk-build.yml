@@ -1,4 +1,3 @@
-# copy to <your-rustdesk-fork>/.github/workflows/flodesk-build.yml
 name: flodesk-build
 on:
   push: { branches: [flodesk], tags: ['v*'] }
@@ -6,6 +5,7 @@ on:
 env:
   RUST_VERSION: "1.75"
   FLUTTER_VERSION: "3.24.5"
+  LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   NDK_VERSION: "r28c"
   CARGO_NDK_VERSION: "3.1.2"
@@ -13,24 +13,73 @@ env:
   RS_KEY: ${{ vars.FLODESK_PUBKEY || 'joRoqzc0SDOHe61V9WrRORk4PqBVzBntfGtzveM3h8M=' }}
 permissions: { contents: write }
 jobs:
+  generate-bridge:
+    uses: ./.github/workflows/bridge.yml
+
   windows:
+    needs: [generate-bridge]
     runs-on: windows-2022
     steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - uses: actions/checkout@v4
         with: { submodules: recursive }
-      - uses: subosito/flutter-action@v2
-        with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
-      - uses: dtolnay/rust-toolchain@master
-        with: { toolchain: "${{ env.RUST_VERSION }}-x86_64-pc-windows-msvc" }
+      - name: Restore bridge files
+        uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2.0.9
+        with: { version: "${{ env.LLVM_VERSION }}" }
+      - name: Install flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225 # v2.12.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+      - name: Replace engine with rustdesk custom flutter engine
+        run: |
+          flutter doctor -v
+          flutter precache --windows
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
+          mv -Force windows-x64-release/* C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+      - name: Patch flutter
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+          cd $(dirname $(dirname $(which flutter)))
+          git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Install LLVM + ImageMagick
+        with: { prefix-key: flodesk-windows }
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+      - name: Install vcpkg dependencies
+        env: { VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static }
+        shell: bash
+        run: |
+          if ! $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
+            exit 1
+          fi
+      - name: Install ImageMagick
         shell: pwsh
         run: |
-          choco install -y llvm imagemagick --no-progress
+          choco install -y imagemagick --no-progress
           $d = Get-ChildItem 'C:\Program Files\ImageMagick-*' -Directory | Select-Object -First 1
           if ($d) { $d.FullName | Out-File -Append -Encoding utf8 $env:GITHUB_PATH }
-      - uses: lukka/run-vcpkg@v11
-        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}", doNotCache: false }
       - name: Verify ImageMagick + logo
         shell: bash
         run: |
@@ -40,40 +89,61 @@ jobs:
         shell: bash
         run: bash flodesk/rebrand.sh . flodesk/logo.png "$RENDEZVOUS" "$RS_KEY"
       - name: Build
-        shell: bash
         run: |
-          python3 -m pip install --user requests
-          flutter pub get --directory flutter
-          python3 build.py --portable --hwcodec --flutter --vram --skip-portable-pack || python3 build.py --flutter
-        env: { VCPKG_ROOT: "${{ env.VCPKG_ROOT }}" }
-      - name: Collect
-        shell: bash
-        run: |
-          mkdir out
-          cp -r flutter/build/windows/x64/runner/Release out/FloDesk-win
-          [ -f out/FloDesk-win/rustdesk.exe ] && mv out/FloDesk-win/rustdesk.exe out/FloDesk-win/FloDesk.exe
-          7z a FloDesk-windows-x64.zip ./out/FloDesk-win
+          python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+          mv ./flutter/build/windows/x64/runner/Release ./FloDesk-win
+          if (Test-Path ./FloDesk-win/rustdesk.exe) { mv ./FloDesk-win/rustdesk.exe ./FloDesk-win/FloDesk.exe }
+          Compress-Archive -Path ./FloDesk-win -DestinationPath FloDesk-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: FloDesk-windows-x64.zip }
+
   android:
+    needs: [generate-bridge]
     runs-on: ubuntu-22.04
     steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake curl gcc-multilib git g++ g++-multilib libclang-dev llvm-dev nasm ninja-build openjdk-17-jdk-headless pkg-config wget imagemagick
       - uses: actions/checkout@v4
         with: { submodules: recursive }
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 17 }
-      - uses: subosito/flutter-action@v2
+      - name: Restore bridge files
+        uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-linux-android,armv7-linux-androideabi
-      - uses: nttld/setup-ndk@v1
-        id: ndk
+      - name: Patch flutter
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
+        id: setup-ndk
         with: { ndk-version: "${{ env.NDK_VERSION }}", add-to-path: true }
-      - run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick clang cmake ninja-build pkg-config nasm
-          cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+      - name: Install vcpkg dependencies (arm64-v8a)
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          if ! ./flutter/build_android_deps.sh arm64-v8a; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with: { toolchain: "${{ env.RUST_VERSION }}", components: rustfmt }
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: flodesk-android, key: aarch64-linux-android }
       - name: Verify ImageMagick + logo
         shell: bash
         run: |
@@ -82,21 +152,32 @@ jobs:
       - name: Rebrand
         shell: bash
         run: bash flodesk/rebrand.sh . flodesk/logo.png "$RENDEZVOUS" "$RS_KEY"
-      - name: "Build (vcpkg deps + native libs, mirrors upstream flutter-build.yml android job)"
+      - name: Build rustdesk lib
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          git clone https://github.com/microsoft/vcpkg /opt/vcpkg && cd /opt/vcpkg && git checkout $VCPKG_COMMIT_ID && ./bootstrap-vcpkg.sh
-          cd $GITHUB_WORKSPACE
-          export VCPKG_ROOT=/opt/vcpkg ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}
-          for t in arm64-android armv7-android; do $VCPKG_ROOT/vcpkg install --triplet $t --x-install-root=$VCPKG_ROOT/installed; done
-          cd flutter && flutter pub get && cd ..
-          ./flutter/ndk_arm64.sh && ./flutter/ndk_arm.sh
-          mkdir -p flutter/android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a}
-          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
-          cp target/armv7-linux-androideabi/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
-          cd flutter && flutter build apk --release --target-platform android-arm,android-arm64 --split-per-abi=false
-          cp build/app/outputs/flutter-apk/app-release.apk ../FloDesk.apk
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+          ./flutter/ndk_arm64.sh
+          mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+          cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/
+          cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+      - name: Build apk
+        shell: bash
+        env: { JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64 }
+        run: |
+          export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties
+          # debug signing (installable; set real signing secrets later for Play/updates)
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          cd flutter
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../FloDesk.apk
       - uses: actions/upload-artifact@v4
         with: { name: android, path: FloDesk.apk }
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, android]
@@ -105,4 +186,4 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
       - uses: softprops/action-gh-release@v2
-        with: { files: dist/* }
+        with: { files: "dist/*" }
