@@ -97,6 +97,27 @@ if 'flodesk_home.dart' not in s:
 PY
 grep -q "FloDeskHome()" "$HP" || { echo "FATAL: home patch not applied" >&2; exit 1; }
 
+# --- 3c) Persian apparel home for Android (mobile ConnectionPage) ---
+MP=flutter/lib/mobile/pages/connection_page.dart
+[ -f "$SCRIPT_DIR/dart/flodesk_mobile_home.dart" ] || { echo "FATAL: flodesk_mobile_home.dart missing" >&2; exit 1; }
+cp "$SCRIPT_DIR/dart/flodesk_mobile_home.dart" flutter/lib/mobile/pages/flodesk_mobile_home.dart
+python3 - "$MP" <<'PY'
+import sys
+p=sys.argv[1]; s=open(p,encoding='utf8').read()
+if 'flodesk_mobile_home.dart' not in s:
+    imp="import 'home_page.dart';"
+    assert imp in s, 'mobile import anchor missing'
+    s=s.replace(imp, imp+"\nimport 'flodesk_mobile_home.dart';",1)
+    a="    Provider.of<FfiModel>(context);\n    return CustomScrollView("
+    assert a in s, 'mobile build() anchor missing (upstream changed?)'
+    s=s.replace(a,"    Provider.of<FfiModel>(context);\n    if (!isWeb) return const FloDeskMobileHome();\n    return CustomScrollView(",1)
+    s=s.replace('translate("Connection");',"'اتصال';",1)
+    open(p,'w',encoding='utf8').write(s)
+PY
+grep -q "FloDeskMobileHome()" "$MP" || { echo "FATAL: mobile patch not applied" >&2; exit 1; }
+sedi "s/final title = translate(\"Share screen\");/final title = 'اشتراک صفحه';/" flutter/lib/mobile/pages/server_page.dart
+sedi "s/final title = translate(\"Settings\");/final title = 'تنظیمات';/" flutter/lib/mobile/pages/settings_page.dart
+
 # --- 4) default server (optional) ---
 if [ -n "$HOST" ]; then
   sedi "s#RENDEZVOUS_SERVERS: &\[&str\] = &\[\".*\"\]#RENDEZVOUS_SERVERS: \&[\&str] = \&[\"$HOST\"]#" libs/hbb_common/src/config.rs
