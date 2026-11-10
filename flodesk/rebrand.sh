@@ -118,6 +118,38 @@ grep -q "FloDeskMobileHome()" "$MP" || { echo "FATAL: mobile patch not applied" 
 sedi "s/final title = translate(\"Share screen\");/final title = 'اشتراک صفحه';/" flutter/lib/mobile/pages/server_page.dart
 sedi "s/final title = translate(\"Settings\");/final title = 'تنظیمات';/" flutter/lib/mobile/pages/settings_page.dart
 
+# --- 3d) Persian default language + RTL locale, install page, switch accent ---
+sedi 's/^    let mut lang = saved_lang.to_lowercase();$/    let mut lang = saved_lang.to_lowercase();\n    if lang.is_empty() { lang = "fa".to_owned(); }/' src/lang.rs
+grep -q 'lang = "fa".to_owned()' src/lang.rs || { echo "FATAL: lang.rs patch not applied" >&2; exit 1; }
+cat >> flutter/lib/common.dart <<'DART'
+
+/// FloDesk: Persian by default (RTL), otherwise the saved language.
+Locale flodeskLocale() {
+  final l = bind.mainGetLocalOption(key: 'lang');
+  if (l.isEmpty || l == 'default') return const Locale('fa');
+  final parts = l.split('-');
+  return parts.length > 1 ? Locale(parts[0], parts[1].toUpperCase()) : Locale(parts[0]);
+}
+DART
+sedi 's/^\( *\)supportedLocales: supportedLocales,$/\1locale: flodeskLocale(),\n\1supportedLocales: supportedLocales,/' flutter/lib/main.dart
+grep -q "locale: flodeskLocale()" flutter/lib/main.dart || { echo "FATAL: main.dart locale patch not applied" >&2; exit 1; }
+SD="$SCRIPT_DIR" python3 - <<'PY'
+import re
+p='flutter/lib/common.dart'; s=open(p,encoding='utf8').read()
+a="    return SwitchThemeData(\n"
+assert a in s, 'switchTheme anchor missing'
+s=s.replace(a,a+"        trackColor: WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.selected) ? const Color(0xFF7C6CFF) : null),\n        thumbColor: WidgetStateProperty.resolveWith((st) => st.contains(WidgetState.selected) ? Colors.white : null),\n",1)
+open(p,'w',encoding='utf8').write(s)
+p='flutter/lib/desktop/pages/install_page.dart'; s=open(p,encoding='utf8').read()
+i=s.index("  @override\n  Widget build(BuildContext context) {\n    final double em = 13;")
+j=s.index("  Future<void> install() async {")
+import os
+new=open(os.environ['SD']+'/dart/install_build.dart.txt',encoding='utf8').read()
+s=s[:i]+new+s[j:]
+s=s.replace("  void selectInstallPath() async {","  Future<void> selectInstallPath() async {",1)
+open(p,'w',encoding='utf8').write(s)
+PY
+
 # --- 4) default server (optional) ---
 if [ -n "$HOST" ]; then
   sedi "s#RENDEZVOUS_SERVERS: &\[&str\] = &\[\".*\"\]#RENDEZVOUS_SERVERS: \&[\&str] = \&[\"$HOST\"]#" libs/hbb_common/src/config.rs

@@ -1,0 +1,169 @@
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = dark ? Color(0xFF0F1115) : Color(0xFFF5F6F8);
+    final card = dark ? Color(0xFF1A1D24) : Colors.white;
+    final line = dark ? Color(0xFF2A2F3A) : Color(0xFFE2E5EA);
+    final muted = dark ? Color(0xFF9AA1AF) : Color(0xFF6B7280);
+    final fg = dark ? Colors.white : Color(0xFF111827);
+    Widget tile(RxBool o, IconData ic, String t, String s) => Obx(() =>
+        SwitchListTile(
+          value: o.value,
+          onChanged: btnEnabled.value ? (v) => o.value = v : null,
+          secondary: Icon(ic, color: muted),
+          title: Text(t, style: TextStyle(fontSize: 14)),
+          subtitle: Text(s, style: TextStyle(fontSize: 12, color: muted)),
+          contentPadding: EdgeInsets.zero,
+        ));
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 560),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset('assets/flodesk_logo.png',
+                          width: 56,
+                          height: 56,
+                          errorBuilder: (_, __, ___) =>
+                              SizedBox(width: 56, height: 56)),
+                    ),
+                    SizedBox(width: 14),
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('نصب FloDesk',
+                              style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: fg)),
+                          Text('دسترسی از راه دور مخصوص کسب‌وکار پوشاک',
+                              style: TextStyle(fontSize: 12.5, color: muted)),
+                        ]),
+                  ]),
+                  SizedBox(height: 22),
+                  Text('محل نصب',
+                      style: TextStyle(fontSize: 12.5, color: muted)),
+                  SizedBox(height: 6),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: line)),
+                    child: Row(children: [
+                      Icon(Icons.folder_outlined, size: 20, color: muted),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: Text(controller.text,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13.5)),
+                        ),
+                      ),
+                      Obx(() => TextButton(
+                          onPressed:
+                              btnEnabled.value ? () async {
+                                    await selectInstallPath();
+                                    setState(() {});
+                                  } : null,
+                          child: Text('تغییر'))),
+                    ]),
+                  ),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: controller,
+                    builder: (context, value, child) =>
+                        InstallDirectoryWarning(directoryPath: value.text),
+                  ),
+                  SizedBox(height: 14),
+                  Container(
+                    padding: EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: line)),
+                    child: Row(children: [
+                      Icon(Icons.shield_outlined, color: muted),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                            'برای نصب به دسترسی مدیر ویندوز نیاز است؛ پس از زدن «نصب»، ویندوز تأیید شما را می‌خواهد.',
+                            style: TextStyle(
+                                fontSize: 12.5, height: 1.8, color: muted)),
+                      ),
+                    ]),
+                  ),
+                  SizedBox(height: 10),
+                  tile(startmenu, Icons.apps_rounded, 'میان‌بر در منوی استارت',
+                      'FloDesk از منوی استارت در دسترس باشد'),
+                  tile(desktopicon, Icons.desktop_windows_outlined,
+                      'آیکون روی دسکتاپ', 'برای دسترسی سریع‌تر'),
+                  tile(printer, Icons.print_outlined, 'نصب چاپگر مجازی',
+                      'چاپ از دستگاه راه‌دور روی چاپگر شما'),
+                  SizedBox(height: 10),
+                  Obx(() => showProgress.value
+                      ? Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: LinearProgressIndicator(
+                              minHeight: 4,
+                              borderRadius: BorderRadius.circular(4)))
+                      : SizedBox(height: 4)),
+                  Obx(() => SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed: btnEnabled.value ? install : null,
+                          style: FilledButton.styleFrom(
+                              backgroundColor: fg,
+                              foregroundColor: bg,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          icon: Icon(Icons.download_rounded),
+                          label: Text('پذیرفتن شرایط و نصب',
+                              style: TextStyle(
+                                  fontSize: 15, fontWeight: FontWeight.bold)),
+                        ),
+                      )),
+                  SizedBox(height: 6),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Obx(() => TextButton(
+                        onPressed: cancelEnabled.value
+                            ? () => windowManager.close()
+                            : null,
+                        child: Text('انصراف'))),
+                    Offstage(
+                      offstage: bind.installShowRunWithoutInstall(),
+                      child: Obx(() => TextButton(
+                          onPressed: btnEnabled.value
+                              ? () => bind.installRunWithoutInstall()
+                              : null,
+                          child: Text('اجرا بدون نصب'))),
+                    ),
+                  ]),
+                  SizedBox(height: 8),
+                  Center(
+                    child: Text(
+                        'با نصب، شرایط استفاده را می‌پذیرید. FloDesk بر پایه‌ی RustDesk و تحت مجوز AGPL-3.0 است.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 11.5, height: 1.8, color: muted)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+

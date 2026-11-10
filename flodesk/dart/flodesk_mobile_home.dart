@@ -45,10 +45,11 @@ class FloDeskMobileHome extends StatefulWidget {
 }
 
 class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
-  static const bg = Color(0xFF0F1115);
-  static const card = Color(0xFF1A1D24);
-  static const line = Color(0xFF2A2F3A);
-  static const muted = Color(0xFF9AA1AF);
+  bool _dark = true;
+  Color get bg => _dark ? const Color(0xFF0F1115) : const Color(0xFFF5F6F8);
+  Color get card => _dark ? const Color(0xFF1A1D24) : Colors.white;
+  Color get line => _dark ? const Color(0xFF2A2F3A) : const Color(0xFFE2E5EA);
+  Color get muted => _dark ? const Color(0xFF9AA1AF) : const Color(0xFF6B7280);
 
   final _quickId = TextEditingController();
   List<_Device> _devices = [];
@@ -110,14 +111,14 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
             content: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(
                   controller: name,
-                  decoration: const InputDecoration(labelText: 'نام دلخواه')),
-              const SizedBox(height: 10),
+                  decoration: InputDecoration(labelText: 'نام دلخواه')),
+              SizedBox(height: 10),
               TextField(
                   controller: id,
                   textDirection: TextDirection.ltr,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'شناسه‌ی دستگاه')),
-              const SizedBox(height: 14),
+                  decoration: InputDecoration(labelText: 'شناسه‌ی دستگاه')),
+              SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final c in _cats)
                   ChoiceChip(
@@ -131,10 +132,10 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('انصراف')),
+                  child: Text('انصراف')),
               FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('ذخیره')),
+                  child: Text('ذخیره')),
             ],
           ),
         ),
@@ -161,15 +162,15 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: card,
-          title: const Text('حذف دستگاه'),
+          title: Text('حذف دستگاه'),
           content: Text('«${d.name}» از فهرست حذف شود؟'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('انصراف')),
+                child: Text('انصراف')),
             FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('حذف')),
+                child: Text('حذف')),
           ],
         ),
       ),
@@ -181,7 +182,7 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   }
 
   Widget _box({required Widget child}) => Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(14),
         decoration: BoxDecoration(
             color: card,
             borderRadius: BorderRadius.circular(16),
@@ -193,9 +194,9 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
     final m = gFFI.serverModel;
     return _box(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('شناسه‌ی این گوشی (برای دریافت پشتیبانی)',
+        Text('شناسه‌ی این گوشی (برای دریافت پشتیبانی)',
             style: TextStyle(color: muted, fontSize: 12)),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         AnimatedBuilder(
           animation: m.serverId,
           builder: (_, __) => InkWell(
@@ -207,18 +208,18 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               textDirection: TextDirection.ltr,
               child: Row(children: [
                 Text(m.serverId.text.isEmpty ? '···' : m.serverId.text,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 2)),
-                const SizedBox(width: 8),
-                const Icon(Icons.copy_rounded, size: 17, color: muted),
+                SizedBox(width: 8),
+                Icon(Icons.copy_rounded, size: 17, color: muted),
               ]),
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        const Text('برای اشتراک صفحه، به تب «اشتراک صفحه» بروید و سرویس را روشن کنید.',
+        SizedBox(height: 4),
+        Text('برای اشتراک صفحه، به تب «اشتراک صفحه» بروید و سرویس را روشن کنید.',
             style: TextStyle(color: muted, fontSize: 11.5, height: 1.7)),
       ]),
     );
@@ -227,9 +228,9 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   Widget _quick() {
     return _box(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('اتصال سریع',
+        Text('اتصال سریع',
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         Row(children: [
           Expanded(
             child: TextField(
@@ -237,7 +238,7 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               textDirection: TextDirection.ltr,
               keyboardType: TextInputType.number,
               onSubmitted: _connect,
-              style: const TextStyle(fontSize: 18, letterSpacing: 1.5),
+              style: TextStyle(fontSize: 18, letterSpacing: 1.5),
               decoration: InputDecoration(
                 hintText: 'شناسه‌ی مقصد',
                 hintTextDirection: TextDirection.rtl,
@@ -246,17 +247,17 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
                 isDense: true,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: line)),
+                    borderSide: BorderSide(color: line)),
               ),
             ),
           ),
           IconButton(
               tooltip: 'ذخیره در دستگاه‌های من',
               onPressed: () => _edit(prefillId: _quickId.text),
-              icon: const Icon(Icons.bookmark_add_outlined)),
+              icon: Icon(Icons.bookmark_add_outlined)),
           FilledButton(
               onPressed: () => _connect(_quickId.text),
-              child: const Text('اتصال')),
+              child: Text('اتصال')),
         ]),
       ]),
     );
@@ -265,8 +266,8 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   Widget _deviceTile(_Device d) {
     final c = _catOf(d.cat);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
           color: card,
           borderRadius: BorderRadius.circular(14),
@@ -280,31 +281,31 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               borderRadius: BorderRadius.circular(12)),
           child: Icon(c.icon, color: c.color),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(d.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: TextStyle(fontWeight: FontWeight.bold)),
             Directionality(
               textDirection: TextDirection.ltr,
               child: Text(d.id,
-                  style: const TextStyle(color: muted, letterSpacing: 1.2)),
+                  style: TextStyle(color: muted, letterSpacing: 1.2)),
             ),
-            Text(c.label, style: const TextStyle(color: muted, fontSize: 11)),
+            Text(c.label, style: TextStyle(color: muted, fontSize: 11)),
           ]),
         ),
         FilledButton(
-            onPressed: () => _connect(d.id), child: const Text('اتصال')),
+            onPressed: () => _connect(d.id), child: Text('اتصال')),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert_rounded, color: muted),
+          icon: Icon(Icons.more_vert_rounded, color: muted),
           onSelected: (v) {
             if (v == 'file') _connect(d.id, file: true);
             if (v == 'edit') _edit(dev: d);
             if (v == 'del') _delete(d);
           },
-          itemBuilder: (_) => const [
+          itemBuilder: (_) => [
             PopupMenuItem(value: 'file', child: Text('انتقال فایل')),
             PopupMenuItem(value: 'edit', child: Text('ویرایش')),
             PopupMenuItem(value: 'del', child: Text('حذف')),
@@ -319,13 +320,13 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
         ? _devices
         : _devices.where((d) => d.cat == _filter).toList();
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(bottom: 24),
       children: [
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(children: [
             Padding(
-              padding: const EdgeInsetsDirectional.only(end: 8),
+              padding: EdgeInsetsDirectional.only(end: 8),
               child: ChoiceChip(
                 label: Text('همه (${_devices.length})'),
                 selected: _filter == 'all',
@@ -334,7 +335,7 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
             ),
             for (final c in _cats)
               Padding(
-                padding: const EdgeInsetsDirectional.only(end: 8),
+                padding: EdgeInsetsDirectional.only(end: 8),
                 child: ChoiceChip(
                   avatar: Icon(c.icon, size: 16, color: c.color),
                   label: Text(c.label),
@@ -344,29 +345,29 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               ),
           ]),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (list.isEmpty)
           _box(
             child: Column(children: [
-              const SizedBox(height: 14),
-              const Icon(Icons.devices_other_rounded, size: 40, color: muted),
-              const SizedBox(height: 10),
+              SizedBox(height: 14),
+              Icon(Icons.devices_other_rounded, size: 40, color: muted),
+              SizedBox(height: 10),
               Text(
                   _devices.isEmpty
                       ? 'هنوز دستگاهی اضافه نکرده‌اید'
                       : 'دستگاهی در این دسته نیست',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              const Text(
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 6),
+              Text(
                   'صندوق‌ها، انبار، دفتر و سالن تولید را با نام دلخواه اضافه کنید.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: muted, fontSize: 12, height: 1.8)),
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               FilledButton.tonalIcon(
                   onPressed: () => _edit(),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('افزودن دستگاه')),
-              const SizedBox(height: 10),
+                  icon: Icon(Icons.add_rounded),
+                  label: Text('افزودن دستگاه')),
+              SizedBox(height: 10),
             ]),
           )
         else ...[
@@ -375,8 +376,8 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
             alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
                 onPressed: () => _edit(),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('افزودن دستگاه')),
+                icon: Icon(Icons.add_rounded),
+                label: Text('افزودن دستگاه')),
           ),
         ],
       ],
@@ -385,32 +386,32 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
 
   Widget _guide() {
     Widget step(int n, String t, String s) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.only(bottom: 12),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             CircleAvatar(
                 radius: 13,
                 backgroundColor: line,
                 child: Text('$n',
-                    style: const TextStyle(fontWeight: FontWeight.bold))),
-            const SizedBox(width: 10),
+                    style: TextStyle(fontWeight: FontWeight.bold))),
+            SizedBox(width: 10),
             Expanded(
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(t, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(t, style: TextStyle(fontWeight: FontWeight.bold)),
                     Text(s,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: muted, fontSize: 12, height: 1.8)),
                   ]),
             ),
           ]),
         );
-    return ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+    return ListView(padding: EdgeInsets.only(bottom: 24), children: [
       _box(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('دریافت پشتیبانی روی این گوشی',
+          Text('دریافت پشتیبانی روی این گوشی',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           step(1, 'شناسه را بدهید',
               'شناسه‌ی بالای صفحه‌ی اصلی را به پشتیبان بگویید (با لمس کپی می‌شود).'),
           step(2, 'سرویس را روشن کنید',
@@ -421,9 +422,9 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               'برای قطع، در همان تب «توقف» را بزنید.'),
         ]),
       ),
-      const SizedBox(height: 12),
+      SizedBox(height: 12),
       _box(
-        child: const Text(
+        child: Text(
             '• رمز یا درخواست اتصال را فقط برای کسی بپذیرید که خودتان با او تماس گرفته‌اید.\n'
             '• هرگز رمز بانکی یا کد پیامکی را در FloDesk وارد نکنید.\n'
             '• FloDesk بر پایه‌ی RustDesk و تحت مجوز AGPL-3.0 است.',
@@ -434,11 +435,13 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
 
   @override
   Widget build(BuildContext context) {
+    _dark = Theme.of(context).brightness == Brightness.dark;
+    final base = Theme.of(context);
     Widget seg(int i, String t) => Expanded(
           child: GestureDetector(
             onTap: () => setState(() => _tab = i),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                   color: _tab == i ? line : Colors.transparent,
                   borderRadius: BorderRadius.circular(10)),
@@ -454,21 +457,28 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
     final Widget content = _tab == 0
         ? _devicesView()
         : (_tab == 1
-            ? const Directionality(
+            ? Directionality(
                 textDirection: TextDirection.ltr, child: PeerTabPage())
             : _guide());
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Container(
+      child: Theme(
+        data: base.copyWith(
+          colorScheme: base.colorScheme.copyWith(
+            primary: _dark ? Colors.white : const Color(0xFF111827),
+            onPrimary: _dark ? const Color(0xFF111827) : Colors.white,
+          ),
+        ),
+        child: Container(
         color: bg,
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+        padding: EdgeInsets.fromLTRB(14, 10, 14, 0),
         child: Column(children: [
           _identity(),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           _quick(),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(3),
+            padding: EdgeInsets.all(3),
             decoration: BoxDecoration(
                 color: card, borderRadius: BorderRadius.circular(12)),
             child: Row(children: [
@@ -477,9 +487,10 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
               seg(2, 'راهنما'),
             ]),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Expanded(child: content),
         ]),
+      ),
       ),
     );
   }
