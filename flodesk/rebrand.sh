@@ -78,6 +78,25 @@ fi
 [ "${USE_FONT:-0}" = 1 ] && sedi -E "s/(static ThemeData (light|dark)Theme = ThemeData\()/\1\n    fontFamily: 'Vazirmatn',/" $T
 echo "RTL: set locale fa in flutter/lib/main.dart (Locale('fa')) or select فارسی in app language; ID/password card font: edit desktop_home_page.dart buildIDBoard/buildPasswordBoard TextStyle(fontSize: 32+)."
 
+
+# --- 3b) Persian apparel home dashboard (flodesk/dart/flodesk_home.dart) ---
+HP=flutter/lib/desktop/pages/desktop_home_page.dart
+[ -f "$SCRIPT_DIR/dart/flodesk_home.dart" ] || { echo "FATAL: flodesk_home.dart missing" >&2; exit 1; }
+cp "$SCRIPT_DIR/dart/flodesk_home.dart" flutter/lib/desktop/pages/flodesk_home.dart
+python3 - "$HP" <<'PY'
+import sys
+p=sys.argv[1]; s=open(p,encoding='utf8').read()
+imp="import 'package:flutter_hbb/desktop/pages/connection_page.dart';"
+assert imp in s, 'import anchor missing'
+if 'flodesk_home.dart' not in s:
+    s=s.replace(imp, imp+"\nimport 'package:flutter_hbb/desktop/pages/flodesk_home.dart';",1)
+    anchor="    final isIncomingOnly = bind.isIncomingOnly();\n    return _buildBlock(\n        child: Row("
+    assert anchor in s, 'build() anchor missing (upstream changed?)'
+    s=s.replace(anchor,"    final isIncomingOnly = bind.isIncomingOnly();\n    if (!isIncomingOnly) return _buildBlock(child: const FloDeskHome());\n    return _buildBlock(\n        child: Row(",1)
+    open(p,'w',encoding='utf8').write(s)
+PY
+grep -q "FloDeskHome()" "$HP" || { echo "FATAL: home patch not applied" >&2; exit 1; }
+
 # --- 4) default server (optional) ---
 if [ -n "$HOST" ]; then
   sedi "s#RENDEZVOUS_SERVERS: &\[&str\] = &\[\".*\"\]#RENDEZVOUS_SERVERS: \&[\&str] = \&[\"$HOST\"]#" libs/hbb_common/src/config.rs
