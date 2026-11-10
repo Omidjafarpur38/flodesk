@@ -70,7 +70,7 @@ jobs:
         env: { VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static }
         shell: bash
         run: |
-          if ! $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"; then
+          if ! $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed" --overlay-ports="$GITHUB_WORKSPACE/flodesk/vcpkg-overlay"; then
             find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
             exit 1
           fi
