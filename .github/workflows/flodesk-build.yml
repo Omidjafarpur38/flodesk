@@ -96,6 +96,18 @@ jobs:
           Compress-Archive -Path ./FloDesk-win -DestinationPath FloDesk-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: FloDesk-windows-x64.zip }
+      - name: Single-file exe (portable packer)
+        continue-on-error: true
+        shell: bash
+        run: |
+          cd libs/portable
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../FloDesk-win -o . -e ../../FloDesk-win/FloDesk.exe
+          cd ../..
+          cp target/release/rustdesk-portable-packer.exe FloDesk.exe
+          ls -l FloDesk.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: windows-exe, path: FloDesk.exe, if-no-files-found: warn }
 
   android:
     needs: [generate-bridge]
