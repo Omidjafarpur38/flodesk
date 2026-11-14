@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/peer_tab_page.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/flodesk_network.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
@@ -64,6 +65,8 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   String _filter = 'all';
   int _tab = 0; // 0 devices, 1 recent, 2 guide
   String _fixedPw = '';
+  bool _showPw = false;
+  int _pwTries = 0;
   Timer? _statusTimer;
 
   @override
@@ -94,6 +97,10 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   // The status pill reads stateGlobal.svcStatus, which upstream only updates
   // from the (not shown here) OnlineStatusWidget, so poll it ourselves.
   Future<void> _pollStatus() async {
+    if (_fixedPw.isEmpty && _pwTries < 40 && mounted) {
+      _pwTries++;
+      if (_pwTries % 3 == 1) _initPassword();
+    }
     try {
       final st = jsonDecode(await bind.mainGetConnectStatus())
           as Map<String, dynamic>;
@@ -215,7 +222,7 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
       showToast('شناسه‌ی دستگاه را وارد کنید');
       return;
     }
-    connect(context, d, isFileTransfer: file);
+    connect(context, d, isFileTransfer: file, forceRelay: floForceRelay());
   }
 
   Future<void> _edit({_Device? dev, String? prefillId}) async {
@@ -369,18 +376,23 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
           Text('رمز ثابت: ', style: TextStyle(color: muted, fontSize: 12)),
           InkWell(
             onTap: () {
+              if (_fixedPw.isEmpty) return;
               Clipboard.setData(ClipboardData(text: _fixedPw));
               showToast('رمز کپی شد');
             },
             child: Directionality(
               textDirection: TextDirection.ltr,
-              child: Text(_fixedPw.isEmpty ? '······' : _fixedPw,
+              child: Text(_fixedPw.isEmpty ? 'در حال آماده‌سازی…' : (_showPw ? _fixedPw : '••••••••'),
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.5)),
             ),
           ),
+          IconButton(
+              tooltip: _showPw ? 'پنهان کردن رمز' : 'نمایش رمز',
+              onPressed: () => setState(() => _showPw = !_showPw),
+              icon: Icon(_showPw ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20)),
           Spacer(),
           TextButton.icon(
               onPressed: _changePassword,
@@ -592,11 +604,17 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
         ]),
       ),
       SizedBox(height: 12),
+      OutlinedButton.icon(
+          onPressed: () => openFloDeskNetwork(context),
+          icon: Icon(Icons.vpn_lock_rounded),
+          label: Text('شبکه، VPN و حالت کم‌سرعت')),
+      SizedBox(height: 12),
       _box(
         child: Text(
             '• رمز یا درخواست اتصال را فقط برای کسی بپذیرید که خودتان با او تماس گرفته‌اید.\n'
             '• هرگز رمز بانکی یا کد پیامکی را در FloDesk وارد نکنید.\n'
-            '• FloDesk بر پایه‌ی RustDesk و تحت مجوز AGPL-3.0 است.',
+            '• FloDesk بر پایه‌ی RustDesk و تحت مجوز AGPL-3.0 است.\n'
+            '• «فلو» (FloDesk) ابزار دسترسی از راه دور و پشتیبانی برای صندوق، انبار و سالن تولید پوشاک است و از سامانه‌ی «فلو پوشاک» می‌آید. نسخه‌ی $kFloVersion',
             style: TextStyle(color: muted, height: 2, fontSize: 12.5)),
       ),
     ]);

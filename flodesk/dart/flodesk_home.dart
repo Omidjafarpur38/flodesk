@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/flodesk_network.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
@@ -71,6 +72,8 @@ class _FloDeskHomeState extends State<FloDeskHome> {
   int _tab = 0;
   bool _hideInstall = false;
   String _fixedPw = '';
+  bool _showPw = false;
+  int _pwTries = 0;
   Timer? _statusTimer;
 
   @override
@@ -114,6 +117,10 @@ class _FloDeskHomeState extends State<FloDeskHome> {
   // The status pill reads stateGlobal.svcStatus, which upstream only updates
   // from the (not shown here) OnlineStatusWidget, so poll it ourselves.
   Future<void> _pollStatus() async {
+    if (_fixedPw.isEmpty && _pwTries < 40 && mounted) {
+      _pwTries++;
+      if (_pwTries % 3 == 1) _initPassword();
+    }
     try {
       final st = jsonDecode(await bind.mainGetConnectStatus())
           as Map<String, dynamic>;
@@ -227,7 +234,7 @@ class _FloDeskHomeState extends State<FloDeskHome> {
       showToast('شناسه‌ی دستگاه را وارد کنید');
       return;
     }
-    connect(context, d, isFileTransfer: file);
+    connect(context, d, isFileTransfer: file, forceRelay: floForceRelay());
   }
 
   Future<void> _editDevice({_Device? dev, String? prefillId}) async {
@@ -333,12 +340,14 @@ class _FloDeskHomeState extends State<FloDeskHome> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: card,
-          title: Text('درباره‌ی FloDesk'),
+          title: Text('درباره‌ی فلو (FloDesk) — نسخه $kFloVersion'),
           content: SizedBox(
             width: 420,
             child: Text(
-              'FloDesk ابزار دسترسی از راه دور مخصوص کسب‌وکارهای پوشاک است '
-              '(پشتیبانی صندوق، انبار، دفتر، تولید و سنگ‌شویی).\n\n'
+              '«فلو» (FloDesk) ابزار دسترسی از راه دور و پشتیبانی برای صندوق، '
+              'انبار و سالن تولید کسب‌وکارهای پوشاک است و از سامانه‌ی «فلو پوشاک» '
+              'می‌آید: از یک دستگاه به دستگاه‌های فروشگاه، انبار، دفتر، سالن برش و '
+              'دوخت و سنگ‌شویی وصل شوید، مشکل را ببینید و رفع کنید.\n\n'
               'این نرم‌افزار بر پایه‌ی RustDesk ساخته شده و مانند آن تحت مجوز '
               'GNU AGPL-3.0 منتشر می‌شود. کد منبع نسخه‌ی شما: '
               'github.com/Omidjafarpur38/flodesk',
@@ -435,9 +444,8 @@ class _FloDeskHomeState extends State<FloDeskHome> {
           ),
           SizedBox(width: 8),
           TextButton(
-              onPressed: () => DesktopTabPage.onAddSetting(
-                  initialPage: SettingsTabKey.network),
-              child: Text('تنظیمات شبکه')),
+              onPressed: () => openFloDeskNetwork(context),
+              child: Text('شبکه و VPN')),
         ]),
       );
     });
@@ -522,6 +530,7 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         InkWell(
                           onTap: () {
+                            if (_fixedPw.isEmpty) return;
                             Clipboard.setData(
                                 ClipboardData(text: _fixedPw));
                             showToast('رمز کپی شد');
@@ -536,7 +545,9 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                             child: Text(
                                 model.approveMode == 'click'
                                     ? 'تأیید دستی'
-                                    : (_fixedPw.isEmpty ? '······' : _fixedPw),
+                                    : (_fixedPw.isEmpty
+                                        ? 'در حال آماده‌سازی…'
+                                        : (_showPw ? _fixedPw : '••••••••')),
                                 style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
@@ -545,6 +556,14 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                           ),
                         ),
                         SizedBox(width: 6),
+                        IconButton(
+                            tooltip: _showPw ? 'پنهان کردن رمز' : 'نمایش رمز',
+                            onPressed: () => setState(() => _showPw = !_showPw),
+                            icon: Icon(
+                                _showPw
+                                    ? Icons.visibility_off_rounded
+                                    : Icons.visibility_rounded,
+                                color: fg)),
                         IconButton(
                             tooltip: 'تغییر رمز',
                             onPressed: _changePassword,
@@ -978,6 +997,9 @@ class _FloDeskHomeState extends State<FloDeskHome> {
         }),
         SizedBox(width: 8),
         _iconBtn(Icons.info_outline_rounded, 'درباره', _about),
+        SizedBox(width: 8),
+        _iconBtn(Icons.vpn_lock_rounded, 'شبکه و VPN',
+            () => openFloDeskNetwork(context)),
         SizedBox(width: 8),
         _iconBtn(Icons.settings_rounded, 'تنظیمات',
             () => DesktopTabPage.onAddSetting()),

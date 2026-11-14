@@ -9,6 +9,7 @@ env:
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   NDK_VERSION: "r28c"
   CARGO_NDK_VERSION: "3.1.2"
+  FLODESK_VERSION: "1.1.0"
   RENDEZVOUS: ${{ vars.FLODESK_SERVER || 'rd.asandesk.ir' }}
   RS_KEY: ${{ vars.FLODESK_PUBKEY || 'joRoqzc0SDOHe61V9WrRORk4PqBVzBntfGtzveM3h8M=' }}
 permissions: { contents: write }
@@ -105,9 +106,15 @@ jobs:
           python3 ./generate.py -f ../../FloDesk-win -o . -e ../../FloDesk-win/FloDesk.exe
           cd ../..
           cp target/release/rustdesk-portable-packer.exe FloDesk.exe
+          cp FloDesk.exe "FloDesk-${FLODESK_VERSION}.exe"
           ls -l FloDesk.exe
       - uses: actions/upload-artifact@v4
-        with: { name: windows-exe, path: FloDesk.exe, if-no-files-found: warn }
+        with:
+          name: windows-exe
+          path: |
+            FloDesk.exe
+            FloDesk-*.exe
+          if-no-files-found: warn
 
   android:
     needs: [generate-bridge]
@@ -187,8 +194,13 @@ jobs:
           cd flutter
           flutter build apk --release --target-platform android-arm64 --split-per-abi
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../FloDesk.apk
+          cp ../FloDesk.apk "../FloDesk-${FLODESK_VERSION}.apk"
       - uses: actions/upload-artifact@v4
-        with: { name: android, path: FloDesk.apk }
+        with:
+          name: android
+          path: |
+            FloDesk.apk
+            FloDesk-*.apk
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

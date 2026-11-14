@@ -82,6 +82,18 @@ fi
 echo "RTL: set locale fa in flutter/lib/main.dart (Locale('fa')) or select فارسی in app language; ID/password card font: edit desktop_home_page.dart buildIDBoard/buildPasswordBoard TextStyle(fontSize: 32+)."
 
 
+# --- 3a) shared network/VPN/low-speed page + version stamp; connection-manager (accept window) colors ---
+FLO_VERSION=${FLODESK_VERSION:-1.1.0}
+[ -f "$SCRIPT_DIR/dart/flodesk_network.dart" ] || { echo "FATAL: flodesk_network.dart missing" >&2; exit 1; }
+sed "s/__FLO_VERSION__/$FLO_VERSION/" "$SCRIPT_DIR/dart/flodesk_network.dart" > flutter/lib/flodesk_network.dart
+grep -q "kFloVersion = '$FLO_VERSION'" flutter/lib/flodesk_network.dart || { echo "FATAL: version stamp failed" >&2; exit 1; }
+# Accept/permission buttons in the incoming-connection window must never depend on the theme accent
+# (a white accent made them white-on-white). Pin them to the violet accent.
+SP=flutter/lib/desktop/pages/server_page.dart
+grep -q "MyTheme.accent" "$SP" || { echo "FATAL: server_page.dart anchor missing" >&2; exit 1; }
+sedi 's/MyTheme\.accent/const Color(0xFF7C6CFF)/g' "$SP"
+sedi 's/Colors\.grey\[700\]/const Color(0xFF4B5563)/' "$SP"
+
 # --- 3b) Persian apparel home dashboard (flodesk/dart/flodesk_home.dart) ---
 HP=flutter/lib/desktop/pages/desktop_home_page.dart
 [ -f "$SCRIPT_DIR/dart/flodesk_home.dart" ] || { echo "FATAL: flodesk_home.dart missing" >&2; exit 1; }
