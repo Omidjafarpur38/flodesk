@@ -55,11 +55,14 @@ grep -q flodesk_logo flutter/pubspec.yaml || echo "TODO: add 'assets/flodesk_log
 
 # --- 3) theme: black & white, RTL, Vazirmatn ---
 T=flutter/lib/common.dart
-sedi -e 's/static const Color accent = Color(0xFF0071FF)/static const Color accent = Color(0xFFFFFFFF)/' \
+sedi -e 's/static const Color accent = Color(0xFF0071FF)/static const Color accent = Color(0xFF7C6CFF)/' \
      -e 's/static const Color button = Color(0xFF2C8CFF)/static const Color button = Color(0xFF2A2F3A)/' \
-     -e 's/static const Color idColor = Color(0xFF00B6F0)/static const Color idColor = Color(0xFFFFFFFF)/' \
+     -e 's/static const Color idColor = Color(0xFF00B6F0)/static const Color idColor = Color(0xFF9D92FF)/' \
      -e 's/scaffoldBackgroundColor: Color(0xFF18191E)/scaffoldBackgroundColor: Color(0xFF0F1115)/' \
      -e 's/static const Color canvasColor = Color(0xFF212121)/static const Color canvasColor = Color(0xFF1F232B)/' \
+     -e 's/static const Color accent50 = Color(0x770071FF)/static const Color accent50 = Color(0x777C6CFF)/' \
+     -e 's/static const Color accent80 = Color(0xAA0071FF)/static const Color accent80 = Color(0xAA7C6CFF)/' \
+     -e '0,/backgroundColor: MyTheme.accent,/s//backgroundColor: MyTheme.accent,\n        foregroundColor: Colors.white,/' \
      -e 's/static const Color border = Color(0xFFCCCCCC)/static const Color border = Color(0xFFE5E4E2)/' $T
 mkdir -p flutter/assets/fonts
 # Vazirmatn (OFL) TTFs ship in flodesk/fonts/ ; register in pubspec ONLY if the files exist (a missing asset breaks the whole build)

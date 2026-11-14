@@ -9,6 +9,8 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/peer_tab_page.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/state_model.dart';
+import 'package:get/get.dart';
 
 const _kDevicesKey = 'flodesk-devices-v1';
 
@@ -46,10 +48,11 @@ class FloDeskMobileHome extends StatefulWidget {
 
 class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   bool _dark = true;
-  Color get bg => _dark ? const Color(0xFF0F1115) : const Color(0xFFF5F6F8);
-  Color get card => _dark ? const Color(0xFF1A1D24) : Colors.white;
-  Color get line => _dark ? const Color(0xFF2A2F3A) : const Color(0xFFE2E5EA);
-  Color get muted => _dark ? const Color(0xFF9AA1AF) : const Color(0xFF6B7280);
+  static const accent = Color(0xFF7C6CFF);
+  Color get bg => _dark ? Color(0xFF0B0C10) : Color(0xFFF6F7FB);
+  Color get card => _dark ? Color(0xFF14161C) : Colors.white;
+  Color get line => _dark ? Color(0xFF262A34) : Color(0xFFE6E8EF);
+  Color get muted => _dark ? Color(0xFF9AA1AF) : Color(0xFF6B7280);
 
   final _quickId = TextEditingController();
   List<_Device> _devices = [];
@@ -194,8 +197,31 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
     final m = gFFI.serverModel;
     return _box(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('شناسه‌ی این گوشی (برای دریافت پشتیبانی)',
-            style: TextStyle(color: muted, fontSize: 12)),
+        Row(children: [
+          Expanded(
+            child: Text('شناسه‌ی این گوشی (برای دریافت پشتیبانی)',
+                style: TextStyle(color: muted, fontSize: 12)),
+          ),
+          Obx(() {
+            final st = stateGlobal.svcStatus.value;
+            final ok = st == SvcStatus.ready;
+            final col = ok
+                ? Color(0xFF34D399)
+                : (st == SvcStatus.connecting
+                    ? Color(0xFFFBBF24)
+                    : Color(0xFFF87171));
+            return Container(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                  color: col.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                  ok ? 'آنلاین' : (st == SvcStatus.connecting ? 'در حال اتصال' : 'آفلاین'),
+                  style: TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.w700, color: col)),
+            );
+          }),
+        ]),
         SizedBox(height: 6),
         AnimatedBuilder(
           animation: m.serverId,

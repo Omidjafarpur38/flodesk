@@ -124,8 +124,8 @@
                         child: FilledButton.icon(
                           onPressed: btnEnabled.value ? install : null,
                           style: FilledButton.styleFrom(
-                              backgroundColor: fg,
-                              foregroundColor: bg,
+                              backgroundColor: Color(0xFF7C6CFF),
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12))),
                           icon: Icon(Icons.download_rounded),
