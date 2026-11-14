@@ -2,6 +2,7 @@
 // flutter/lib/mobile/pages/flodesk_mobile_home.dart by flodesk/rebrand.sh and
 // wired into the mobile ConnectionPage.build() by a small patch.
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,10 +10,13 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/widgets/peer_tab_page.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 
 const _kDevicesKey = 'flodesk-devices-v1';
+const _kPwKey = 'flodesk-fixed-pw-v1';
+const _kPwInitKey = 'flodesk-fixed-pw-init-v1';
 
 class _Cat {
   final String key, label;
@@ -58,10 +62,12 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   List<_Device> _devices = [];
   String _filter = 'all';
   int _tab = 0; // 0 devices, 1 recent, 2 guide
+  String _fixedPw = '';
 
   @override
   void initState() {
     super.initState();
+    _initPassword();
     try {
       final raw = bind.mainGetLocalOption(key: _kDevicesKey);
       if (raw.isNotEmpty) {
@@ -79,6 +85,102 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
     _quickId.dispose();
     super.dispose();
   }
+
+  String _randomPw() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    final r = Random.secure();
+    return List.generate(8, (_) => chars[r.nextInt(chars.length)]).join();
+  }
+
+  // Fixed (permanent) password: set once, changes only when the user asks.
+  Future<void> _initPassword() async {
+    try {
+      var pw = bind.mainGetLocalOption(key: _kPwKey);
+      if (bind.mainGetLocalOption(key: _kPwInitKey) != '1') {
+        await bind.mainSetOption(
+            key: kOptionVerificationMethod, value: kUsePermanentPassword);
+        await bind.mainSetLocalOption(key: _kPwInitKey, value: '1');
+      }
+      if (pw.isEmpty) {
+        final np = _randomPw();
+        if (await bind.mainSetPermanentPasswordWithResult(password: np)) {
+          pw = np;
+          await bind.mainSetLocalOption(key: _kPwKey, value: pw);
+        }
+      }
+      if (mounted) setState(() => _fixedPw = pw);
+    } catch (_) {}
+  }
+
+  Future<void> _changePassword() async {
+    final c = TextEditingController();
+    String err = '';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            backgroundColor: card,
+            scrollable: true,
+            title: Text('تغییر رمز ثابت'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  'رمز فعلی تا وقتی خودتان تغییرش ندهید ثابت می‌ماند. رمز جدید حداقل ۶ نویسه باشد.',
+                  style: TextStyle(fontSize: 12.5, height: 1.8, color: muted)),
+              SizedBox(height: 12),
+              TextField(
+                controller: c,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                    labelText: 'رمز جدید',
+                    errorText: err.isEmpty ? null : err),
+              ),
+              SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                    onPressed: () => setS(() => c.text = _randomPw()),
+                    icon: Icon(Icons.casino_outlined, size: 18),
+                    label: Text('رمز تصادفی')),
+              ),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('انصراف')),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: accent, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final np = c.text.trim();
+                  if (np.length < 6) {
+                    setS(() => err = 'حداقل ۶ نویسه');
+                    return;
+                  }
+                  final ok = await bind.mainSetPermanentPasswordWithResult(
+                      password: np);
+                  if (!ok) {
+                    setS(() => err = 'ثبت رمز ناموفق بود');
+                    return;
+                  }
+                  await bind.mainSetLocalOption(key: _kPwKey, value: np);
+                  await bind.mainSetOption(
+                      key: kOptionVerificationMethod,
+                      value: kUsePermanentPassword);
+                  if (mounted) setState(() => _fixedPw = np);
+                  Navigator.pop(ctx);
+                  showToast('رمز ثابت تغییر کرد');
+                },
+                child: Text('ذخیره'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 
   String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
 
@@ -244,6 +346,29 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
             ),
           ),
         ),
+        SizedBox(height: 10),
+        Row(children: [
+          Text('رمز ثابت: ', style: TextStyle(color: muted, fontSize: 12)),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: _fixedPw));
+              showToast('رمز کپی شد');
+            },
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(_fixedPw.isEmpty ? '······' : _fixedPw,
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5)),
+            ),
+          ),
+          Spacer(),
+          TextButton.icon(
+              onPressed: _changePassword,
+              icon: Icon(Icons.edit_rounded, size: 16),
+              label: Text('تغییر رمز')),
+        ]),
         SizedBox(height: 4),
         Text('برای اشتراک صفحه، به تب «اشتراک صفحه» بروید و سرویس را روشن کنید.',
             style: TextStyle(color: muted, fontSize: 11.5, height: 1.7)),

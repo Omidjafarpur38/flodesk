@@ -2,6 +2,7 @@
 // Copied to flutter/lib/desktop/pages/flodesk_home.dart by flodesk/rebrand.sh
 // and wired into DesktopHomePage.build() by a one-line patch (see rebrand.sh).
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,8 @@ import 'package:get/get.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 
 const _kDevicesKey = 'flodesk-devices-v1';
+const _kPwKey = 'flodesk-fixed-pw-v1';
+const _kPwInitKey = 'flodesk-fixed-pw-init-v1';
 
 class _Cat {
   final String key, label;
@@ -66,11 +69,13 @@ class _FloDeskHomeState extends State<FloDeskHome> {
   String _filter = 'all';
   int _tab = 0;
   bool _hideInstall = false;
+  String _fixedPw = '';
 
   @override
   void initState() {
     super.initState();
     _load();
+    _initPassword();
   }
 
   @override
@@ -98,6 +103,102 @@ class _FloDeskHomeState extends State<FloDeskHome> {
         key: _kDevicesKey,
         value: jsonEncode(_devices.map((d) => d.toJson()).toList()));
     if (mounted) setState(() {});
+  }
+
+
+  String _randomPw() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    final r = Random.secure();
+    return List.generate(8, (_) => chars[r.nextInt(chars.length)]).join();
+  }
+
+  // Fixed (permanent) password: set once, changes only when the user asks.
+  Future<void> _initPassword() async {
+    try {
+      var pw = bind.mainGetLocalOption(key: _kPwKey);
+      if (bind.mainGetLocalOption(key: _kPwInitKey) != '1') {
+        await bind.mainSetOption(
+            key: kOptionVerificationMethod, value: kUsePermanentPassword);
+        await bind.mainSetLocalOption(key: _kPwInitKey, value: '1');
+      }
+      if (pw.isEmpty) {
+        final np = _randomPw();
+        if (await bind.mainSetPermanentPasswordWithResult(password: np)) {
+          pw = np;
+          await bind.mainSetLocalOption(key: _kPwKey, value: pw);
+        }
+      }
+      if (mounted) setState(() => _fixedPw = pw);
+    } catch (_) {}
+  }
+
+  Future<void> _changePassword() async {
+    final c = TextEditingController();
+    String err = '';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            backgroundColor: card,
+            scrollable: true,
+            title: Text('تغییر رمز ثابت'),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                  'رمز فعلی تا وقتی خودتان تغییرش ندهید ثابت می‌ماند. رمز جدید حداقل ۶ نویسه باشد.',
+                  style: TextStyle(fontSize: 12.5, height: 1.8, color: muted)),
+              SizedBox(height: 12),
+              TextField(
+                controller: c,
+                textDirection: TextDirection.ltr,
+                decoration: InputDecoration(
+                    labelText: 'رمز جدید',
+                    errorText: err.isEmpty ? null : err),
+              ),
+              SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                    onPressed: () => setS(() => c.text = _randomPw()),
+                    icon: Icon(Icons.casino_outlined, size: 18),
+                    label: Text('رمز تصادفی')),
+              ),
+            ]),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('انصراف')),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                    backgroundColor: accent, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final np = c.text.trim();
+                  if (np.length < 6) {
+                    setS(() => err = 'حداقل ۶ نویسه');
+                    return;
+                  }
+                  final ok = await bind.mainSetPermanentPasswordWithResult(
+                      password: np);
+                  if (!ok) {
+                    setS(() => err = 'ثبت رمز ناموفق بود');
+                    return;
+                  }
+                  await bind.mainSetLocalOption(key: _kPwKey, value: np);
+                  await bind.mainSetOption(
+                      key: kOptionVerificationMethod,
+                      value: kUsePermanentPassword);
+                  if (mounted) setState(() => _fixedPw = np);
+                  Navigator.pop(ctx);
+                  showToast('رمز ثابت تغییر کرد');
+                },
+                child: Text('ذخیره'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -326,8 +427,6 @@ class _FloDeskHomeState extends State<FloDeskHome> {
 
   Widget _hero() {
     final model = gFFI.serverModel;
-    final showOneTime = model.approveMode != 'click' &&
-        model.verificationMethod != kUsePermanentPassword;
     Widget label(String t) =>
         Text(t, style: TextStyle(color: muted, fontSize: 12.5));
     return Container(
@@ -396,7 +495,7 @@ class _FloDeskHomeState extends State<FloDeskHome> {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  label(showOneTime ? 'رمز یک‌بارمصرف' : 'رمز دسترسی'),
+                  label('رمز ثابت'),
                   SizedBox(height: 6),
                   AnimatedBuilder(
                     animation: model.serverPasswd,
@@ -406,7 +505,7 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                         InkWell(
                           onTap: () {
                             Clipboard.setData(
-                                ClipboardData(text: model.serverPasswd.text));
+                                ClipboardData(text: _fixedPw));
                             showToast('رمز کپی شد');
                           },
                           child: Container(
@@ -419,9 +518,7 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                             child: Text(
                                 model.approveMode == 'click'
                                     ? 'تأیید دستی'
-                                    : (model.serverPasswd.text.isEmpty
-                                        ? '······'
-                                        : model.serverPasswd.text),
+                                    : (_fixedPw.isEmpty ? '······' : _fixedPw),
                                 style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
@@ -429,13 +526,11 @@ class _FloDeskHomeState extends State<FloDeskHome> {
                                     color: fg)),
                           ),
                         ),
-                        if (showOneTime) SizedBox(width: 6),
-                        if (showOneTime)
-                          IconButton(
-                              tooltip: 'رمز جدید',
-                              onPressed: () =>
-                                  bind.mainUpdateTemporaryPassword(),
-                              icon: Icon(Icons.refresh_rounded, color: fg)),
+                        SizedBox(width: 6),
+                        IconButton(
+                            tooltip: 'تغییر رمز',
+                            onPressed: _changePassword,
+                            icon: Icon(Icons.edit_rounded, color: fg)),
                       ]),
                     ),
                   ),
