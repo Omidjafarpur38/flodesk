@@ -1,6 +1,7 @@
 // FloDesk: Persian RTL Android home (apparel business). Copied to
 // flutter/lib/mobile/pages/flodesk_mobile_home.dart by flodesk/rebrand.sh and
 // wired into the mobile ConnectionPage.build() by a small patch.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -63,11 +64,14 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
   String _filter = 'all';
   int _tab = 0; // 0 devices, 1 recent, 2 guide
   String _fixedPw = '';
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     _initPassword();
+    _pollStatus();
+    _statusTimer = Timer.periodic(Duration(seconds: 1), (_) => _pollStatus());
     try {
       final raw = bind.mainGetLocalOption(key: _kDevicesKey);
       if (raw.isNotEmpty) {
@@ -82,8 +86,22 @@ class _FloDeskMobileHomeState extends State<FloDeskMobileHome> {
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _quickId.dispose();
     super.dispose();
+  }
+
+  // The status pill reads stateGlobal.svcStatus, which upstream only updates
+  // from the (not shown here) OnlineStatusWidget, so poll it ourselves.
+  Future<void> _pollStatus() async {
+    try {
+      final st = jsonDecode(await bind.mainGetConnectStatus())
+          as Map<String, dynamic>;
+      final n = st['status_num'] as int;
+      stateGlobal.svcStatus.value = n == 0
+          ? SvcStatus.connecting
+          : (n == 1 ? SvcStatus.ready : SvcStatus.notReady);
+    } catch (_) {}
   }
 
   String _randomPw() {

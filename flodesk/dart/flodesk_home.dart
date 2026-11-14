@@ -1,6 +1,7 @@
 // FloDesk: Persian RTL home dashboard for apparel businesses.
 // Copied to flutter/lib/desktop/pages/flodesk_home.dart by flodesk/rebrand.sh
 // and wired into DesktopHomePage.build() by a one-line patch (see rebrand.sh).
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -70,16 +71,20 @@ class _FloDeskHomeState extends State<FloDeskHome> {
   int _tab = 0;
   bool _hideInstall = false;
   String _fixedPw = '';
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
     _initPassword();
+    _pollStatus();
+    _statusTimer = Timer.periodic(Duration(seconds: 1), (_) => _pollStatus());
   }
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _quickId.dispose();
     super.dispose();
   }
@@ -105,6 +110,19 @@ class _FloDeskHomeState extends State<FloDeskHome> {
     if (mounted) setState(() {});
   }
 
+
+  // The status pill reads stateGlobal.svcStatus, which upstream only updates
+  // from the (not shown here) OnlineStatusWidget, so poll it ourselves.
+  Future<void> _pollStatus() async {
+    try {
+      final st = jsonDecode(await bind.mainGetConnectStatus())
+          as Map<String, dynamic>;
+      final n = st['status_num'] as int;
+      stateGlobal.svcStatus.value = n == 0
+          ? SvcStatus.connecting
+          : (n == 1 ? SvcStatus.ready : SvcStatus.notReady);
+    } catch (_) {}
+  }
 
   String _randomPw() {
     const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
