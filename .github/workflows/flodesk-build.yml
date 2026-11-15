@@ -150,19 +150,21 @@ jobs:
           vcpkgDirectory: /opt/artifacts/vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
-      - name: Install vcpkg dependencies (arm64-v8a)
+      - name: Install vcpkg dependencies (arm64-v8a + armeabi-v7a)
         shell: bash
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          if ! ./flutter/build_android_deps.sh arm64-v8a; then
-            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
-            exit 1
-          fi
+          for abi in arm64-v8a armeabi-v7a; do
+            if ! ./flutter/build_android_deps.sh "$abi"; then
+              find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
+              exit 1
+            fi
+          done
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with: { toolchain: "${{ env.RUST_VERSION }}", components: rustfmt }
       - uses: Swatinem/rust-cache@v2
-        with: { prefix-key: flodesk-android, key: aarch64-linux-android }
+        with: { prefix-key: flodesk-android, key: android-arm64-armv7 }
       - name: Verify ImageMagick + logo
         shell: bash
         run: |
@@ -177,30 +179,78 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          rustup target add aarch64-linux-android
+          rustup target add aarch64-linux-android armv7-linux-androideabi
           cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
           ./flutter/ndk_arm64.sh
-          mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a
+          ./flutter/ndk_arm.sh
+          mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a ./flutter/android/app/src/main/jniLibs/armeabi-v7a
+          cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/
+          cp ./target/armv7-linux-androideabi/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
           cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/
           cp ./target/aarch64-linux-android/release/liblibrustdesk.so ./flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
-      - name: Build apk
+      - name: Build apk (universal arm64-v8a + armeabi-v7a)
         shell: bash
-        env: { JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64 }
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          KS_B64: ${{ secrets.FLODESK_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.FLODESK_KEYSTORE_PASSWORD }}
         run: |
+          set -e
           export PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
           sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" ./flutter/android/gradle.properties
-          # debug signing (installable; set real signing secrets later for Play/updates)
-          sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "SIGNING=release" >> "$GITHUB_ENV"
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/flodesk-release.p12"
+            cat > flutter/android/key.properties <<KP
+          storePassword=$KS_PASS
+          keyPassword=$KS_PASS
+          keyAlias=flodesk
+          storeFile=$RUNNER_TEMP/flodesk-release.p12
+          KP
+            # key.properties lines must start at column 0
+            sed -i 's/^ *//' flutter/android/key.properties
+            grep -q "storePassword keystoreProperties" flutter/android/app/build.gradle
+            sed -i "s/^\( *\)storePassword keystoreProperties\['storePassword'\]/&\n\1storeType 'pkcs12'/" flutter/android/app/build.gradle
+            grep -q "storeType 'pkcs12'" flutter/android/app/build.gradle
+          else
+            echo "::warning::FLODESK_KEYSTORE_B64/PASSWORD secrets missing -> DEBUG-signed APK (not for distribution)"
+            echo "SIGNING=debug" >> "$GITHUB_ENV"
+            sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
+          fi
           cd flutter
-          flutter build apk --release --target-platform android-arm64 --split-per-abi
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../FloDesk.apk
+          flutter build apk --release --target-platform android-arm,android-arm64
+          cp build/app/outputs/flutter-apk/app-release.apk ../FloDesk.apk
           cp ../FloDesk.apk "../FloDesk-${FLODESK_VERSION}.apk"
+      - name: Verify apk (apksigner, aapt, ABIs)
+        shell: bash
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "build-tools: $BT"
+          {
+            echo "== apksigner verify =="
+            "$BT/apksigner" verify --verbose --print-certs FloDesk.apk
+            echo "== aapt badging =="
+            "$BT/aapt" dump badging FloDesk.apk | grep -E "^(package|sdkVersion|targetSdkVersion|native-code|application-label:|uses-permission)" 
+            echo "== native libs =="
+            unzip -l FloDesk.apk | grep -E "lib/(arm64-v8a|armeabi-v7a)/" 
+            echo "== sha256 =="
+            sha256sum FloDesk.apk
+          } 2>&1 | tee apk-verify.log
+          "$BT/apksigner" verify --verbose FloDesk.apk 2>&1 | grep -E "v1 scheme.*true|v2 scheme.*true|v3 scheme.*true" | wc -l | grep -q 3
+          "$BT/aapt" dump badging FloDesk.apk | grep -q "native-code: 'arm64-v8a' 'armeabi-v7a'\|native-code: 'armeabi-v7a' 'arm64-v8a'"
+          "$BT/aapt" dump badging FloDesk.apk | grep -q "package: name='top.poshakerp.flodesk'"
+          if [ "$SIGNING" = release ]; then
+            ! "$BT/apksigner" verify --print-certs FloDesk.apk | grep -qi "Android Debug"
+          fi
+          cp apk-verify.log "FloDesk-verify-${FLODESK_VERSION}.log"
       - uses: actions/upload-artifact@v4
         with:
           name: android
           path: |
             FloDesk.apk
             FloDesk-*.apk
+            FloDesk-verify-*.log
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

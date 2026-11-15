@@ -27,3 +27,9 @@ Output → `build/app/outputs/flutter-apk/app-release.apk` → `FloDesk.apk`.
 Server/key can also be set at runtime: Settings → Network → ID/Relay server (the dialog stays editable).
 
 CI: copy `flodesk-build.yml` to `.github/workflows/`, defaults to rd.asandesk.ir + its key (override with repo vars `FLODESK_SERVER`, `FLODESK_PUBKEY`); tag `v*` → Release.
+
+## نصب APK اندروید (خارج از Play Store)
+- اگر Play Protect نوشت «باید توسط گوگل تأیید شود»: **More details ← Install anyway** را بزنید، یا Play Protect را موقتاً خاموش کنید.
+- برای نصب از مرورگر/فایل‌منیجر، گزینه‌ی «Install unknown apps» را برای همان برنامه فعال کنید.
+- APK یکی است و روی گوشی‌های ۶۴ بیتی (arm64-v8a) و ۳۲ بیتی (armeabi-v7a) نصب می‌شود.
+- امضا: keystore ثابت release (Secrets: `FLODESK_KEYSTORE_B64`, `FLODESK_KEYSTORE_PASSWORD`). همیشه با همان کلید امضا کنید تا به‌روزرسانی بدون حذف نصب ممکن بماند؛ نسخه‌های قبلی (1.1.0 با امضای debug) باید یک‌بار حذف شوند.
