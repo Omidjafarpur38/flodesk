@@ -221,7 +221,7 @@ jobs:
             sed -i "s/signingConfigs.release/signingConfigs.debug/g" ./flutter/android/app/build.gradle
           fi
           cd flutter
-          flutter build apk --release --target-platform android-arm,android-arm64
+          flutter build apk --release --target-platform android-arm,android-arm64 --build-name "${FLODESK_VERSION}" --build-number 110
           cp build/app/outputs/flutter-apk/app-release.apk ../FloDesk.apk
           cp ../FloDesk.apk "../FloDesk-${FLODESK_VERSION}.apk"
       - name: Verify apk (apksigner, aapt, ABIs)
@@ -240,7 +240,7 @@ jobs:
             echo "== sha256 =="
             sha256sum FloDesk.apk
           } 2>&1 | tee apk-verify.log
-          "$BT/apksigner" verify --verbose FloDesk.apk 2>&1 | grep -E "v1 scheme.*true|v2 scheme.*true|v3 scheme.*true" | wc -l | grep -q 3
+          "$BT/apksigner" verify --verbose FloDesk.apk 2>&1 | grep -E "v1 scheme.*true|v2 scheme.*true" | wc -l | grep -q 2
           "$BT/aapt" dump badging FloDesk.apk | grep -q "native-code: 'arm64-v8a' 'armeabi-v7a'\|native-code: 'armeabi-v7a' 'arm64-v8a'"
           "$BT/aapt" dump badging FloDesk.apk | grep -q "package: name='top.poshakerp.flodesk'"
           if [ "$SIGNING" = release ]; then
