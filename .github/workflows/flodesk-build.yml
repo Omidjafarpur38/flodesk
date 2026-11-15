@@ -150,17 +150,15 @@ jobs:
           vcpkgDirectory: /opt/artifacts/vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
-      - name: Install vcpkg dependencies (arm64-v8a + armeabi-v7a)
+      - name: Install vcpkg dependencies (arm64-v8a)
         shell: bash
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
-          for abi in arm64-v8a armeabi-v7a; do
-            if ! ./flutter/build_android_deps.sh "$abi"; then
-              find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
-              exit 1
-            fi
-          done
+          if ! ./flutter/build_android_deps.sh arm64-v8a; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
+            exit 1
+          fi
       - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with: { toolchain: "${{ env.RUST_VERSION }}", components: rustfmt }
       - uses: Swatinem/rust-cache@v2
@@ -182,6 +180,11 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi
           cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
           ./flutter/ndk_arm64.sh
+          # vcpkg manifest mode purges other triplets: install armv7 deps only AFTER the arm64 lib is built
+          if ! ./flutter/build_android_deps.sh armeabi-v7a; then
+            find "${VCPKG_ROOT}/" -name "*.log" | while read -r f; do echo "$f:"; cat "$f"; done
+            exit 1
+          fi
           ./flutter/ndk_arm.sh
           mkdir -p ./flutter/android/app/src/main/jniLibs/arm64-v8a ./flutter/android/app/src/main/jniLibs/armeabi-v7a
           cp ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so ./flutter/android/app/src/main/jniLibs/armeabi-v7a/
