@@ -94,27 +94,98 @@ jobs:
           python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec --vram
           mv ./flutter/build/windows/x64/runner/Release ./FloDesk-win
           if (Test-Path ./FloDesk-win/rustdesk.exe) { mv ./FloDesk-win/rustdesk.exe ./FloDesk-win/FloDesk.exe }
-          Compress-Archive -Path ./FloDesk-win -DestinationPath FloDesk-windows-x64.zip
+      # Authenticode: unsigned remote-access binaries are what AV heuristics flag as "Trojan".
+      # A real code-signing cert (OV/EV) is required; self-signed does NOT help. Secrets: FLODESK_CODESIGN_PFX_B64 / FLODESK_CODESIGN_PASSWORD
+      - name: Sign binaries (Authenticode, optional)
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.FLODESK_CODESIGN_PFX_B64 }}
+          PFX_PASS: ${{ secrets.FLODESK_CODESIGN_PASSWORD }}
+        run: |
+          if (-not $env:PFX_B64 -or -not $env:PFX_PASS) {
+            Write-Host "::warning::Code-signing secrets missing -> binaries are UNSIGNED (higher antivirus/SmartScreen false-positive risk)"
+            "SIGNED=no" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          $st = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName | Select-Object -Last 1
+          foreach ($f in @('FloDesk-win\FloDesk.exe','FloDesk-win\librustdesk.dll')) {
+            if (Test-Path $f) {
+              & $st.FullName sign /f $pfx /p $env:PFX_PASS /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "FloDesk" $f
+              if ($LASTEXITCODE -ne 0) { throw "signtool failed: $f" }
+              & $st.FullName verify /pa /v $f
+              if ($LASTEXITCODE -ne 0) { throw "signature verify failed: $f" }
+            }
+          }
+          Remove-Item $pfx -Force
+          "SIGNED=yes" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Zip
+        run: Compress-Archive -Path ./FloDesk-win -DestinationPath FloDesk-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: FloDesk-windows-x64.zip }
-      - name: Single-file exe (portable packer)
-        continue-on-error: true
-        shell: bash
+      # Replaces the old self-extracting "portable packer" single-file exe (unpacks+runs from %TEMP% = classic trojan-dropper pattern).
+      # A normal Inno Setup installer installs to Program Files / user dir and has an uninstaller.
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.FLODESK_CODESIGN_PFX_B64 }}
+          PFX_PASS: ${{ secrets.FLODESK_CODESIGN_PASSWORD }}
         run: |
-          cd libs/portable
-          pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../FloDesk-win -o . -e ../../FloDesk-win/FloDesk.exe
-          cd ../..
-          cp target/release/rustdesk-portable-packer.exe FloDesk.exe
-          cp FloDesk.exe "FloDesk-${FLODESK_VERSION}.exe"
-          ls -l FloDesk.exe
+          choco install -y innosetup --no-progress
+          $v = $env:FLODESK_VERSION
+          $iss = @"
+          [Setup]
+          AppId={{B7C2F0A1-5D3E-4F6A-9C11-F10DE5C0A001}
+          AppName=FloDesk
+          AppVersion=$v
+          AppVerName=FloDesk $v
+          AppPublisher=FloDesk
+          DefaultDirName={autopf}\FloDesk
+          DefaultGroupName=FloDesk
+          OutputDir=.
+          OutputBaseFilename=FloDesk-Setup-$v
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesAllowed=x64compatible
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequired=lowest
+          PrivilegesRequiredOverridesAllowed=dialog
+          UninstallDisplayIcon={app}\FloDesk.exe
+          WizardStyle=modern
+          [Tasks]
+          Name: desktopicon; Description: "Desktop shortcut"
+          [Files]
+          Source: "FloDesk-win\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+          [Icons]
+          Name: "{group}\FloDesk"; Filename: "{app}\FloDesk.exe"
+          Name: "{autodesktop}\FloDesk"; Filename: "{app}\FloDesk.exe"; Tasks: desktopicon
+          [Run]
+          Filename: "{app}\FloDesk.exe"; Description: "Launch FloDesk"; Flags: nowait postinstall skipifsilent
+          "@
+          $iss = ($iss -split "`n" | ForEach-Object { $_.TrimStart() }) -join "`n"
+          Set-Content -Path flodesk.iss -Value $iss -Encoding utf8
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" flodesk.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Copy-Item "FloDesk-Setup-$v.exe" FloDesk-Setup.exe
+          if ($env:PFX_B64 -and $env:PFX_PASS) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'codesign2.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+            $st = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName | Select-Object -Last 1
+            foreach ($f in @("FloDesk-Setup-$v.exe","FloDesk-Setup.exe")) {
+              & $st.FullName sign /f $pfx /p $env:PFX_PASS /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d "FloDesk Setup" $f
+              if ($LASTEXITCODE -ne 0) { throw "signtool failed: $f" }
+            }
+            Remove-Item $pfx -Force
+          }
+          Get-FileHash FloDesk-Setup.exe, FloDesk-windows-x64.zip -Algorithm SHA256 | Format-Table Hash, Path -AutoSize | Out-String -Width 200 | Write-Host
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-exe
+          name: windows-installer
           path: |
-            FloDesk.exe
-            FloDesk-*.exe
-          if-no-files-found: warn
+            FloDesk-Setup.exe
+            FloDesk-Setup-*.exe
+          if-no-files-found: error
 
   android:
     needs: [generate-bridge]

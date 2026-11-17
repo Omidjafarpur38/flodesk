@@ -33,3 +33,10 @@ CI: copy `flodesk-build.yml` to `.github/workflows/`, defaults to rd.asandesk.ir
 - برای نصب از مرورگر/فایل‌منیجر، گزینه‌ی «Install unknown apps» را برای همان برنامه فعال کنید.
 - APK یکی است و روی گوشی‌های ۶۴ بیتی (arm64-v8a) و ۳۲ بیتی (armeabi-v7a) نصب می‌شود.
 - امضا: keystore ثابت release (Secrets: `FLODESK_KEYSTORE_B64`, `FLODESK_KEYSTORE_PASSWORD`). همیشه با همان کلید امضا کنید تا به‌روزرسانی بدون حذف نصب ممکن بماند؛ نسخه‌های قبلی (1.1.0 با امضای debug) باید یک‌بار حذف شوند.
+
+## آنتی‌ویروس و «تروجان» تشخیص دادن ویندوز
+
+- علت اصلی: EXE تک‌فایلی قبلی (portable packer) خودش را در `%TEMP%` باز و اجرا می‌کرد، که الگوی کلاسیک تروجان‌دراپر است، و فایل بدون امضای دیجیتال بود. این روش حذف شد.
+- اکنون: نصب‌کننده‌ی عادی `FloDesk-Setup.exe` (Inno Setup، نصب در Program Files یا پوشه‌ی کاربر + حذف‌کننده) و `FloDesk-windows-x64.zip` (پوشه‌ی بدون بسته‌بندی).
+- حل ریشه‌ای فقط با **امضای Authenticode** گواهی واقعی (OV/EV) است. گواهی خودامضا فایده ندارد. Secretهای `FLODESK_CODESIGN_PFX_B64` و `FLODESK_CODESIGN_PASSWORD` را در GitHub بگذارید؛ CI خودکار `FloDesk.exe`، `librustdesk.dll` و نصب‌کننده را امضا و تأیید می‌کند.
+- ابزار کنترل از راه دور ذاتاً مستعد هشدار نادرست است. برای هر آنتی‌ویروس گزارش False Positive بدهید: Microsoft Defender (https://www.microsoft.com/wdsi/filesubmission)، و سایت همان فروشنده‌ی آنتی‌ویروس، با SHA-256 فایل.
